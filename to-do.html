@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>To-Do List</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+    />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+    <style>
+      .task-container {
+        margin-bottom: 10px;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        background: #f9f9f9;
+      }
+
+      .task-container .completed {
+        background-color: #f0f0f0;
+      }
+
+      .task-container .completed-text {
+        text-decoration: line-through;
+        color: gray;
+      }
+
+      .task-container .d-flex {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      button:hover {
+        opacity: 0.8;
+      }
+
+      .ms-4 {
+        margin-left: 30px;
+      }
+
+      .task-container .subtask .completed-text {
+        text-decoration: line-through;
+        color: gray;
+      }
+
+      .task-container .subtask {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .task-container .subtask button {
+        pointer-events: auto;
+        opacity: 1;
+      }
+
+      .task-container .handle {
+        cursor: grab;
+        padding: 5px;
+        font-size: 1.2rem;
+        margin: 0 10px;
+      }
+
+      .task-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+
+      .task-column {
+        flex: 1 1 calc(33.33% - 10px);
+        max-width: calc(33.33% - 10px);
+      }
+
+      .upload-container {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .upload-btn {
+        display: inline-block;
+        padding: 12px 20px;
+        font-size: 16px;
+        font-weight: bold;
+        color: #fff;
+        background-color: #007bff;
+        border: 2px solid #007bff;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.3s ease-in-out;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .upload-btn:hover {
+        background-color: #0056b3;
+        border-color: #004085;
+      }
+
+      .upload-btn input[type="file"] {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        opacity: 0;
+        cursor: pointer;
+      }
+
+      .file-name {
+        font-size: 14px;
+        color: #333;
+        font-weight: bold;
+        max-width: 200px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .task-container.bg-success {
+        background-color: #d4edda !important;
+      }
+
+      @media (max-width: 991px) {
+        .task-column {
+          flex: 1 1 calc(50% - 10px);
+          max-width: calc(50% - 10px);
+        }
+      }
+
+      @media (max-width: 576px) {
+        .task-column {
+          flex: 1 1 100%;
+          max-width: 100%;
+        }
+      }
+    </style>
+  </head>
+  <body class="container mt-4">
+    <h2 class="text-center">To-Do List</h2>
+
+    <div class="row my-5">
+      <div class="col-12 col-md-4 mb-3">
+        <div class="upload-container">
+          <label class="upload-btn">
+            Choose File
+            <input type="file" id="fileInput" />
+          </label>
+          <span class="file-name" id="fileName">No file chosen</span>
+        </div>
+      </div>
+
+      <div class="col-12 col-md-4 mb-3">
+        <button class="btn btn-primary w-100" onclick="loadTasksFromFile()">
+          Load Tasks from File
+        </button>
+      </div>
+
+      <div class="col-12 col-md-4 mb-3">
+        <button class="btn btn-success w-100" onclick="downloadTasks()">
+          Download Tasks
+        </button>
+      </div>
+    </div>
+
+    <div class="row mb-3">
+      <div class="col-9">
+        <input
+          type="text"
+          id="taskInput"
+          class="form-control"
+          placeholder="Enter task"
+        />
+      </div>
+      <div class="col-3">
+        <button class="btn btn-primary w-100" onclick="addTask()">
+          Add New Task
+        </button>
+      </div>
+    </div>
+
+    <div id="taskList" class="task-row"></div>
+
+    <script>
+      document
+        .getElementById("fileInput")
+        .addEventListener("change", function () {
+          const fileName = this.files[0]
+            ? this.files[0].name
+            : "No file chosen";
+          document.getElementById("fileName").textContent = fileName;
+        });
+
+      let tasks = JSON.parse(localStorage.getItem("tasks")) || [];
+
+      if (tasks.length === 0) {
+        tasks = [];
+        saveTasks();
+      }
+
+      function saveTasks() {
+        localStorage.setItem("tasks", JSON.stringify(tasks));
+      }
+
+      function renderTasks() {
+        const taskList = document.getElementById("taskList");
+        taskList.innerHTML = "";
+        tasks.forEach((task, index) => {
+          const taskDiv = document.createElement("div");
+          taskDiv.className = `task-container task-column ${
+            task.completed ? "bg-success" : ""
+          }`;
+
+          taskDiv.innerHTML = `
+            <div class="d-flex align-items-center">
+              <span class="handle"><i class="fa-solid fa-up-down-left-right"></i></span>
+              <input type="checkbox" class="me-2" onchange="toggleTask(${index})" ${
+            task.completed ? "checked" : ""
+          }>
+              <span class="task-text ${
+                task.completed ? "completed-text" : ""
+              }" id="task-text-${index}">${task.text}</span>
+              <div class="ms-auto">
+                <button class="btn btn-success btn-sm ms-2" onclick="addSubTask(${index})"><i class="fa fa-plus"></i></button>
+                <button class="btn btn-warning btn-sm ms-2" onclick="editTask(${index})"><i class="fa fa-edit"></i></button>
+                <button class="btn btn-danger btn-sm ms-2" onclick="removeTask(${index})"><i class="fa fa-trash"></i></button>
+              </div>
+            </div>
+            <div class="ms-4 mt-2" id="subtasks-${index}"></div>
+          `;
+          taskList.appendChild(taskDiv);
+          renderSubTasks(index);
+        });
+
+        new Sortable(taskList, {
+          animation: 150,
+          handle: ".handle",
+          onEnd: function (evt) {
+            if (evt.oldIndex === evt.newIndex) return;
+
+            // Move the task in the array
+            const movedTask = tasks.splice(evt.oldIndex, 1)[0];
+            tasks.splice(evt.newIndex, 0, movedTask);
+
+            saveTasks();
+            renderTasks(); // Ensure UI updates with new indexes
+          },
+        });
+      }
+
+      function addTask() {
+        const taskInput = document.getElementById("taskInput");
+        if (!taskInput.value.trim()) {
+          alert("Task cannot be empty!");
+          return;
+        }
+        tasks.push({ text: taskInput.value, completed: false, subtasks: [] });
+        taskInput.value = "";
+        saveTasks();
+        renderTasks();
+      }
+
+      function loadTasksFromFile() {
+        const fileInput = document.getElementById("fileInput");
+        const file = fileInput.files[0];
+
+        if (!file) {
+          alert("Please select a file first!");
+          return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = function (event) {
+          try {
+            const loadedTasks = JSON.parse(event.target.result);
+            tasks = loadedTasks;
+            saveTasks();
+            renderTasks();
+          } catch (error) {
+            alert(
+              "Error reading the file. Please make sure it's a valid JSON file."
+            );
+          }
+        };
+        reader.readAsText(file);
+      }
+
+      function downloadTasks() {
+        let fileName = "";
+
+        while (!fileName.trim()) {
+          fileName = prompt("Enter file name (without extension):");
+
+          if (fileName === null) {
+            alert("Download canceled! No file was saved.");
+            return;
+          }
+
+          if (!fileName.trim()) {
+            alert("File name cannot be empty. Please enter a valid name.");
+          }
+        }
+
+        const finalFileName = fileName.trim() + ".json";
+
+        const tasksJson = JSON.stringify(tasks, null, 2);
+        const blob = new Blob([tasksJson], { type: "application/json" });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = finalFileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+
+      function toggleTask(index) {
+        tasks[index].completed = !tasks[index].completed;
+        tasks[index].subtasks.forEach(
+          (sub) => (sub.completed = tasks[index].completed)
+        );
+        saveTasks();
+        renderTasks();
+      }
+
+      function removeTask(index) {
+        tasks.splice(index, 1);
+        saveTasks();
+        renderTasks();
+      }
+
+      function addSubTask(index) {
+        const subTaskInput = document.createElement("input");
+        subTaskInput.type = "text";
+        subTaskInput.className = "form-control mb-2";
+        subTaskInput.placeholder = "Enter sub-task";
+
+        subTaskInput.onblur = function () {
+          if (!this.value.trim()) {
+            alert("Subtask cannot be empty!");
+            subTaskInput.remove();
+            return;
+          }
+
+          tasks[index].subtasks.push({ text: this.value, completed: false });
+
+          tasks[index].completed = false;
+
+          saveTasks();
+          renderTasks();
+        };
+
+        document.getElementById(`subtasks-${index}`).appendChild(subTaskInput);
+        subTaskInput.focus();
+      }
+
+      function renderSubTasks(index) {
+        const subtaskContainer = document.getElementById(`subtasks-${index}`);
+        subtaskContainer.innerHTML = "";
+        subtaskContainer.dataset.taskIndex = index;
+
+        tasks[index].subtasks.forEach((subtask, subIndex) => {
+          const subDiv = document.createElement("div");
+          subDiv.className = `subtask d-flex align-items-center mt-1 ${
+            subtask.completed ? "completed" : ""
+          }`;
+          subDiv.innerHTML = `
+            <span class="handle"><i class="fa-solid fa-up-down"></i></span>
+            <input type="checkbox" class="me-2" onchange="toggleSubTask(${index}, ${subIndex})" ${
+            subtask.completed ? "checked" : ""
+          }>
+            <span id="subtask-text-${index}-${subIndex}" class="${
+            subtask.completed ? "completed-text" : ""
+          }">${subtask.text}</span>
+            <div class="ms-auto">
+              <button class="btn btn-warning btn-sm ms-2" onclick="editSubTask(${index}, ${subIndex})"><i class="fa fa-edit"></i></button>
+              <button class="btn btn-danger btn-sm ms-2" onclick="removeSubTask(${index}, ${subIndex})"><i class="fa fa-trash"></i></button>
+            </div>
+          `;
+          subtaskContainer.appendChild(subDiv);
+        });
+
+        new Sortable(subtaskContainer, {
+          group: "subtasks",
+          animation: 150,
+          handle: ".handle",
+          onEnd: function (evt) {
+            const oldTaskIndex = evt.from.dataset.taskIndex;
+            const newTaskIndex = evt.to.dataset.taskIndex;
+
+            const movedSubTask = tasks[oldTaskIndex].subtasks.splice(
+              evt.oldIndex,
+              1
+            )[0];
+            tasks[newTaskIndex].subtasks.splice(evt.newIndex, 0, movedSubTask);
+
+            saveTasks();
+            renderTasks();
+          },
+        });
+      }
+
+      function toggleSubTask(index, subIndex) {
+        tasks[index].subtasks[subIndex].completed =
+          !tasks[index].subtasks[subIndex].completed;
+
+        const allSubTasksCompleted = tasks[index].subtasks.every(
+          (subtask) => subtask.completed
+        );
+
+        tasks[index].completed = allSubTasksCompleted;
+
+        saveTasks();
+        renderTasks();
+      }
+
+      function removeSubTask(index, subIndex) {
+        tasks[index].subtasks.splice(subIndex, 1);
+        saveTasks();
+        renderTasks();
+      }
+
+      function editTask(index) {
+        const taskText = document.getElementById(`task-text-${index}`);
+
+        const existingInput =
+          taskText.parentElement.querySelector('input[type="text"]');
+        if (existingInput) {
+          updateTask(index, existingInput.value);
+          return;
+        }
+
+        taskText.style.display = "none";
+
+        const input = document.createElement("input");
+        input.type = "text";
+        input.className = "form-control form-control-sm";
+        input.value = tasks[index].text;
+
+        const taskTextParent = taskText.parentElement;
+        taskTextParent.style.display = "flex";
+        taskTextParent.style.alignItems = "center";
+        taskTextParent.style.justifyContent = "space-between";
+
+        input.style.flex = "1";
+
+        input.onchange = function () {
+          updateTask(index, this.value);
+          taskText.style.display = "inline";
+          input.remove();
+        };
+
+        taskTextParent.insertBefore(input, taskText);
+        input.focus();
+      }
+
+      function updateTask(index, newText) {
+        if (!newText.trim()) {
+          alert("Task cannot be empty!");
+          return;
+        }
+
+        tasks[index].text = newText;
+        saveTasks();
+        renderTasks();
+      }
+
+      function editSubTask(index, subIndex) {
+        const subtaskText = document.getElementById(
+          `subtask-text-${index}-${subIndex}`
+        );
+
+        const existingInput =
+          subtaskText.parentElement.querySelector('input[type="text"]');
+        if (existingInput) {
+          updateSubTask(index, subIndex, existingInput.value);
+          return;
+        }
+
+        subtaskText.style.display = "none";
+
+        const input = document.createElement("input");
+        input.type = "text";
+        input.className = "form-control form-control-sm";
+        input.value = tasks[index].subtasks[subIndex].text;
+
+        const subtaskTextParent = subtaskText.parentElement;
+        subtaskTextParent.style.display = "flex";
+        subtaskTextParent.style.alignItems = "center";
+        subtaskTextParent.style.justifyContent = "space-between";
+
+        input.style.flex = "1";
+
+        input.onchange = function () {
+          updateSubTask(index, subIndex, this.value);
+          subtaskText.style.display = "inline";
+          input.remove();
+        };
+
+        subtaskTextParent.insertBefore(input, subtaskText);
+        input.focus();
+      }
+
+      function updateSubTask(index, subIndex, newText) {
+        if (!newText.trim()) {
+          alert("Subtask cannot be empty!");
+          return;
+        }
+
+        tasks[index].subtasks[subIndex].text = newText;
+        saveTasks();
+        renderTasks();
+      }
+
+      renderTasks();
+    </script>
+  </body>
+</html>
